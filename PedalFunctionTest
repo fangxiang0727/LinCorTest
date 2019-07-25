@@ -1,0 +1,159 @@
+from nptdms import TdmsFile
+import numpy as np
+from matplotlib import pyplot as plt
+import os,sys
+#########################################################
+def offset(Angle,Signal):# input is signal(Angle,PWM/Analog)
+    FV=9 #short for First point value
+    i1=0
+    for ele1 in Signal:
+        i1=i1+1
+        if ele1>FV:
+            break
+
+    #get the FisrtValue' angle
+    FPA=Angle[i1-1] #short for First Point Angle
+    FPV=Signal[i1-1]#short for first point Value
+    #find the second signal >70%
+    SV=np.max(Signal) # short for second point value
+    i2=0
+    for ele2 in Signal:
+        i2=i2+1
+        if ele2==SV:
+            break
+    SPA=Angle[i2-1] #short for second point angle
+    SPV=Signal[i2-1]#short for second point Value
+    
+    k=(FPV-SPV)/(FPA-SPA)#the measured k of the angle-PWM chart.
+    InflectionValue=(Signal[0]+Signal[1]+Signal[2]+Signal[3])/4
+    InflectionAngle=(InflectionValue-SPV)/k+SPA
+
+    return InflectionAngle,InflectionValue,k
+
+#########################################################
+def correlation(PWM,Analog):
+    #Corelation
+    Co=PWM-Analog
+    return Co
+########################################################
+def linearity(Angle,Signal):#Angle is AngleModified, Signal is signal
+    #Theoritical Angle-PWM
+    #PWM=k*Angle+b,  k=(70-8)/11.44, b=8
+    stdk=(70-8)/11.44
+    Signalstd=stdk*Angle+8
+    #linearity_signal
+    lin=Signal-Signalstd
+    return lin
+###########################################################
+def DrawChart(Angle,AngleModified,PWM,Analog):
+    #check the StartAngle and FinishAngle
+    StartAngleNumber=0 #the number for StartAngle ,0 dergree.
+    for item in AngleModified:
+        StartAngleNumber=StartAngleNumber+1
+        if item>0:
+            break
+    FinishAngleNumber=0 #the number for FinishAngle,max dergree.
+    for item in AngleModified:
+        FinishAngleNumber=FinishAngleNumber+1
+        if item==np.max(AngleModified):
+            break    
+    #for chart axis value
+    MaxAngle=np.max(AngleModified)
+    CurvePWMMaxValue=np.max(PWM)
+    CurveAnalogMaxValue=np.max(Analog)
+    #**************standard Curve********************#
+    stdk=(70-8)/11.44
+    stdSignal=stdk*AngleModified+8
+    #************draw Angle-PWM Curve****************#
+    plt.figure(figsize=(22,22))
+    plt.subplot(3,2,1)
+    plt.plot(Angle,PWM,AngleModified,PWM,AngleModified,stdSignal)
+    #Draw three Curves in a Diagram, Angle-PWM, AngleModified-PWM,AngleModified-stdSignal
+    plt.axis([0,MaxAngle,7,CurvePWMMaxValue])
+    plt.title('PWMCurve')
+    plt.xlabel("TravelAngle°")
+    plt.grid(True)
+
+    #**************draw Angle-Analog Curve**********#
+    plt.subplot(3,2,2)
+    plt.plot(Angle,Analog,AngleModified,Analog,AngleModified,stdSignal)
+    #Draw three Curves in a Diagram, Angle-Analog, AngleModified-Analog,AngleModified-stdSignal
+    plt.axis([0,MaxAngle,7,CurveAnalogMaxValue])
+    plt.title('AnalogCurve')
+    plt.xlabel("TravelAngle°")
+    plt.grid(True)
+
+    #********************draw PWM linearity Chart(angle-PWM Linearity)*************#
+    linearityPWM=linearity(AngleModified,PWM)
+    MinLinPWM=np.min(linearityPWM[StartAngleNumber-1:FinishAngleNumber])#for chart axis
+    MaxLinPWM=np.max(linearityPWM[StartAngleNumber-1:FinishAngleNumber])#for chart axis setting
+
+    plt.subplot(3,2,3)
+    plt.plot(AngleModified[StartAngleNumber-1:FinishAngleNumber],linearityPWM[StartAngleNumber-1:FinishAngleNumber])
+    plt.axis([0,MaxAngle,MinLinPWM,MaxLinPWM])
+    plt.title("LinearityPWM_%")
+    plt.xlabel("TravelAngle°")
+    plt.ylabel("LinValue%")
+    plt.grid(True)
+
+    #****************draw Analog linearity Chart(angle-Analog Linearity)************#
+    linearityAna=linearity(AngleModified,Analog)
+    MinLinAnalog=np.min(linearityAna[StartAngleNumber-1:FinishAngleNumber])#for chart axis
+    MaxLinAnalog=np.max(linearityAna[StartAngleNumber-1:FinishAngleNumber])# for chart axis
+    
+    plt.subplot(3,2,4)
+    plt.plot(AngleModified[StartAngleNumber-1:FinishAngleNumber],linearityAna[StartAngleNumber-1:FinishAngleNumber])
+    plt.axis([0,MaxAngle,MinLinAnalog,MaxLinAnalog])
+    plt.title("LinearityAnalog")
+    plt.xlabel("TravelAngle°")
+    plt.ylabel("LinValue%")
+    plt.grid(True)
+
+    #******************corelation***********************************#
+    CO=correlation(PWM,Analog)
+    MinCO=np.min(CO)
+    MaxCO=np.max(CO)
+    plt.subplot(3,2,5)
+    plt.xlabel("TravelAngle°")
+    plt.ylabel("CoValue%")
+    plt.plot(AngleModified,CO)
+    plt.axis([0,MaxAngle,MinCO,MaxCO])
+    plt.title("Correlation")
+    plt.grid(True)
+    #**********************output summary as text information************
+    plt.subplot(3,2,6)
+    plt.plot()
+    plt.title('info_summary')
+    plt.axis([0,5,0,5])
+
+    plt.text(0.1,4,'Linearity_PWM: %.2f'%max(-MinLinPWM,MaxLinPWM)+'%',size=20)
+    plt.text(0.1,3.5,'Linearity_Analog: %.2f'%max(-MinLinAnalog,MaxLinAnalog)+'%',size=20)
+    plt.text(0.1,3,'Correlation: %.2f'%max(-MinCO,MaxCO)+'%',size=20)
+    
+    plt.show()
+###############################################################################################
+#*****************************************Main() program**************************************#
+def main(DataName):
+    #os.chdir('C:/Users/fun.fang/Desktop/123/data')
+    #read the tdms file , get the PWM/Analog/Angle
+    TdFile=TdmsFile(DataName)
+    PWM=TdFile.object("PWM","cDAQ2Mod2/ai0").data
+    Analog=TdFile.object("Analog","cDAQ2Mod3/ai0").data*20 #AnalogSignal/5*100, change from Voltage to percentage.
+    Angle=TdFile.object("Encoder","cDAQ2Mod3_1/ctr0").data
+    #print(type(Angle))
+
+    #inflection detection and offset the Angle data.
+    InPwm=offset(Angle,PWM) #InPwm is short for InflectionPWM
+    InAna=offset(Angle,Analog) #InAna is short for InflectionAnalog
+    print('PWK_k: %.4f'%InPwm[2]+'\n'+'PWM_Inflection_Point: %.3f   %.3f'%(InPwm[0],InPwm[1]),'\n')
+    print('ANA_k: %.4f'%InAna[2]+'\n'+'ANA_Inflection_Point: %.3f   %.3f'%(InAna[0],InAna[1]),'\n')
+    AngleModified=Angle-InPwm[0] #adjust the curve ,match the statr point with Zero
+    
+    #draw all the chart
+    DrawChart(Angle,AngleModified,PWM,Analog)
+
+if __name__=='__main__':
+    DataName=input('输入文件名字并带完整后缀，(例如DataForTest.tdms):\n')
+    while DataName not in os.listdir():
+            DataName=input('文件不存在，请重新输入，(文件名字格式>>> DataForTest.tdms ):\n')
+    main(DataName)
