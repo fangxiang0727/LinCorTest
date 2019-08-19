@@ -16,8 +16,8 @@ def offset(Angle,Signal):# input is signal(Angle,PWM/Analog)
     #get the FisrtValue' angle
     FPA=Angle[i1-1] #short for First Point Angle
     FPV=Signal[i1-1]#short for first point Value
-    #find the second signal >70%
-    SV=np.max(Signal) # short for second point value
+    #find the second signal =72% or max_value
+    SV=min(np.max(Signal),72) # short for second point value
     i2=0
     for ele2 in Signal:
         i2=i2+1
@@ -38,16 +38,15 @@ def correlation(PWM,Analog):
     Co=PWM-Analog
     return Co
 ########################################################
-def linearity(Angle,Signal):#Angle is AngleModified, Signal is signal
+def linearity(Angle,Signal,stdk):#Angle is AngleModified, Signal is signal
     #Theoritical Angle-PWM
     #PWM=k*Angle+b,  k=(70-8)/11.44, b=8
-    stdk=(70-8)/11.44
     Signalstd=stdk*Angle+8
     #linearity_signal
     lin=Signal-Signalstd
     return lin
 ###########################################################
-def DrawChart(Angle,AngleModified,PWM,Analog,DataName):
+def DrawChart(Angle,AngleModified,PWM,Analog,DataName,stdk):
     #check the StartAngle and FinishAngle
     StartAngleNumber=0 #the number for StartAngle ,0 dergree.
     for item in AngleModified:
@@ -64,29 +63,33 @@ def DrawChart(Angle,AngleModified,PWM,Analog,DataName):
     CurvePWMMaxValue=np.max(PWM)
     CurveAnalogMaxValue=np.max(Analog)
     #**************standard Curve********************#
-    stdk=(70-8)/11.44
+    
     stdSignal=stdk*AngleModified+8
     #************draw Angle-PWM Curve****************#
     plt.figure(figsize=(22,22))
     plt.subplot(3,2,1)
-    plt.plot(Angle,PWM,AngleModified,PWM,AngleModified,stdSignal)
-    #Draw three Curves in a Diagram, Angle-PWM, AngleModified-PWM,AngleModified-stdSignal
+    plt.plot(AngleModified,PWM,AngleModified,stdSignal)
+    #Draw three Curves in a Diagram,AngleModified-PWM,AngleModified-stdSignal
     plt.axis([0,MaxAngle,7,CurvePWMMaxValue])
     plt.ylabel('PWM')
     #plt.xlabel("TravelAngle°")
     plt.grid(True)
-
+    LabelPWM = ['MeasuredPWM', 'Theoritical']
+    plt.legend(LabelPWM, loc='upper left')
+    
     #**************draw Angle-Analog Curve**********#
     plt.subplot(3,2,2)
-    plt.plot(Angle,Analog,AngleModified,Analog,AngleModified,stdSignal)
-    #Draw three Curves in a Diagram, Angle-Analog, AngleModified-Analog,AngleModified-stdSignal
+    plt.plot(AngleModified,Analog,AngleModified,stdSignal)
+    #Draw two Curves in a Diagram,AngleModified-Analog,AngleModified-stdSignal
     plt.axis([0,MaxAngle,7,CurveAnalogMaxValue])
     plt.ylabel('Analog')
     #plt.xlabel("TravelAngle°")
     plt.grid(True)
+    LabelAna = ['MeasuredAnalog', 'Theoritical']
+    plt.legend(LabelAna, loc='upper left')
 
     #********************draw PWM linearity Chart(angle-PWM Linearity)*************#
-    linearityPWM=linearity(AngleModified,PWM)
+    linearityPWM=linearity(AngleModified,PWM,stdk)
     MinLinPWM=np.min(linearityPWM[StartAngleNumber-1:FinishAngleNumber])#for chart axis
     MaxLinPWM=np.max(linearityPWM[StartAngleNumber-1:FinishAngleNumber])#for chart axis setting
 
@@ -99,7 +102,7 @@ def DrawChart(Angle,AngleModified,PWM,Analog,DataName):
     plt.grid(True)
 
     #****************draw Analog linearity Chart(angle-Analog Linearity)************#
-    linearityAna=linearity(AngleModified,Analog)
+    linearityAna=linearity(AngleModified,Analog,stdk)
     MinLinAnalog=np.min(linearityAna[StartAngleNumber-1:FinishAngleNumber])#for chart axis
     MaxLinAnalog=np.max(linearityAna[StartAngleNumber-1:FinishAngleNumber])# for chart axis
     
@@ -128,21 +131,21 @@ def DrawChart(Angle,AngleModified,PWM,Analog,DataName):
     #plt.title('info_summary')
     plt.axis([0,5,0,6])
 
-    plt.text(1,4.5,'Linearity_PWM: %.2f'%max(-MinLinPWM,MaxLinPWM)+'%',size=10)
-    plt.text(1,3,'Linearity_Analog: %.2f'%max(-MinLinAnalog,MaxLinAnalog)+'%',size=10)
-    plt.text(1,1.5,'Correlation: %.2f'%max(-MinCO,MaxCO)+'%',size=10)
-    plt.text(4,1,'%s'%DataName,size=10)
-    
+    plt.text(1,4.5,'Linearity_PWM: %.2f'%max(-MinLinPWM,MaxLinPWM)+'%',size=15)
+    plt.text(1,3,'Linearity_Analog: %.2f'%max(-MinLinAnalog,MaxLinAnalog)+'%',size=15)
+    plt.text(1,1.5,'Correlation: %.2f'%max(-MinCO,MaxCO)+'%',size=15)
+    plt.text(4,1,'%s'%DataName,size=15)
+    plt.savefig('%s.png'%DataName[:-5])
     plt.show()
 ###############################################################################################
 #*****************************************Main() program**************************************#
-def main(DataName):
+def main(DataName,funbias):
     #os.chdir('C:/Users/fun.fang/Desktop/123/data')
     #read the tdms file , get the PWM/Analog/Angle
     TdFile=TdmsFile(DataName)
-    PWM=TdFile.object("PWM","cDAQ2Mod2/ai0").data
-    Analog=TdFile.object("Analog","cDAQ2Mod3/ai0").data*20 #AnalogSignal/5*100, change from Voltage to percentage.
-    Angle=TdFile.object("Encoder","cDAQ2Mod3_1/ctr0").data
+    PWM=TdFile.object("PWM","cDAQ2Mod2/ai0").data[funbias:]
+    Analog=TdFile.object("Analog","cDAQ2Mod3/ai0").data[funbias:]*20 #AnalogSignal/5*100, change from Voltage to percentage.
+    Angle=TdFile.object("Encoder","cDAQ2Mod3_1/ctr0").data[funbias:]
     #print(type(Angle))
 
     #inflection detection and offset the Angle data.
@@ -153,11 +156,16 @@ def main(DataName):
     AngleModified=Angle-InPwm[0] #adjust the curve ,match the statr point with Zero
     
     #draw all the chart
-    DrawChart(Angle,AngleModified,PWM,Analog,DataName)
+    DrawChart(Angle,AngleModified,PWM,Analog,DataName,InPwm[2])
 
 if __name__=='__main__':
     print('\n\n\n'+'>>>>>>Pedal Function Test | Angle-Signal Analysis<<<<<<<'+'\n\n\n')
     DataName=input('input the FileName XXXX.tdms,Press ENTER twice to Confirm input  :) \n')
-    while DataName not in os.listdir():
+    
+    while DataName.lower() not in ['quit']:# this 'while' is to check whether the input is a 'FileName' or 'quit request'
+        while DataName not in os.listdir(): #this 'while' is to check if input DataName exits or not.
             DataName=input('FileName is not existing, Try Again Pls.>>> XXX.tdms<<<  :( \n')
-    main(DataName)
+        FunBias=input('input the SelectedDataStart "number",Press ENTER twice to Confirm input  :) \n')
+        main(DataName,int(FunBias))
+        DataName=input('\nWell Done ,Ready for next round ,PLease input the FileName XXXX.tdms,  :) \n')
+    print('Mission Completed') #complete the exe program and exe.close
